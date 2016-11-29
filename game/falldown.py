@@ -26,14 +26,13 @@ draw_options = pymunk.pygame_util.DrawOptions(screen)
 class Environment:
 
     def __init__(self):
-        # initialise agent
         self.init_agent()
         self.init_boundaries()
-        # init list of obstacles and create the first one
         self.running = True
         self.hold_stationary = True
+        # init list of obstacles and create the first one
         self.obstacles = []
-        # self.tick()
+        self.create_new_obstacle()
         pass
 
     def tick(self, action_to_take):
@@ -51,11 +50,8 @@ class Environment:
         #     self.agent_body.position = (width/2, height/2)
         #     self.agent_body.velocity = (0.0, 0.0)
 
-        if len(self.obstacles) == 0:
+        if self.obstacles[-1][0].position[1] > 50:
             self.create_new_obstacle()
-        elif self.obstacles[-1][0].position[1] > 50:
-            self.create_new_obstacle()
-
 
         self.take_action(action_to_take)
         screen.fill(THECOLORS["white"])
@@ -99,9 +95,25 @@ class Environment:
     def create_new_obstacle(self):
         # add new pymunk body to the space that overrides gravity, give it a constant velocity upwards, friction > 0.
         # append the body to a list of obstacle bodies in a tuple with a 'passed' boolean set to false.
-        
-
+        # A kinematic body is an hybrid body which is not affected by forces and collisions like
+        # a static body but can moved with a linear velocity like a dynamic body.
+        obstacle_body = pymunk.Body(mass=1, moment=1, body_type=pymunk.Body.KINEMATIC)
+        obstacle_body.position = (0.0, 0.0)
+        obstacle_shape = pymunk.Poly(obstacle_body, [(5.0,5.0),(5.0,10.0),(width-5, 5.0), (width-5, 10.0)])
+        # obstacle_shape = pymunk.Segment(obstacle_body, (5.0, ))
+        obstacle_shape.color = THECOLORS["black"]
+        obstacle_shape.friction = 0.5
+        obstacle_shape.elasticity = 0.1
+        obstacle_body._set_velocity_func(self.obstacle_velocity_function())
+        space.add(obstacle_body, obstacle_shape)
+        self.obstacles.append((obstacle_body, False))
         pass
+
+    # velocity integration function for the obstacles.
+    def obstacle_velocity_function(self):
+        def f(body, gravity, damping, dt):
+            body._set_velocity((0.0, 20))
+        return f
 
     def remove_off_screen_obstacles(self):
         # if bottom of obstacle y-coordinate is less than 0, remove it from the list and space.
@@ -112,7 +124,8 @@ class Environment:
         self.agent_body.position = (width/2, height/2)
         self.agent_shape = pymunk.Circle(self.agent_body, 15)
         self.agent_shape.color = THECOLORS["red"]
-        self.agent_shape.elasticity = 1
+        self.agent_shape.elasticity = 0.1
+        self.agent_shape.friction = 0.0
         space.add(self.agent_body, self.agent_shape)
 
     def init_boundaries(self):
