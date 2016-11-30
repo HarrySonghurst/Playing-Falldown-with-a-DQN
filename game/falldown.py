@@ -24,11 +24,12 @@ draw_options = pymunk.pygame_util.DrawOptions(screen)
 
 class Environment:
 
-    def __init__(self, platform_speed=80, platform_spacing=80, gap_size=50):
+    def __init__(self, platform_speed=60, platform_spacing=80, gap_size=40):
         self.init_agent()
         self.init_boundaries()
         self.running = True
         self.hold_agent_stationary = True
+        self.score = 0
         # init list of platforms and create the first one
         self.platform_spacing = platform_spacing
         self.platform_speed = platform_speed
@@ -53,9 +54,13 @@ class Environment:
         # create new platform when the lowest platform height > platform_spacing
         if self.platforms[-1][0].position[1] > self.platform_spacing:
             self.create_new_platform()
-            
+
         self.remove_off_screen_platforms()
         self.take_action(action_to_take)
+        reward = self.get_reward()
+        if reward != 0:
+            self.score += reward
+            print(self.score)
 
         # update physics and draw to screen
         screen.fill(THECOLORS["white"])
@@ -78,8 +83,8 @@ class Environment:
 
     def take_action(self, a):
         # action == [0, 0] : do not change agent velocity
-        # action == [0, 1] : decrease agent x velocity
-        # action == [1, 0] : increase agent x velocity
+        # action == [0, 1] : left
+        # action == [1, 0] : right
         if a == [0, 1]:
             self.agent_body.apply_impulse_at_local_point((-15.0, 0.0), (0.0, 0.0))
         elif a == [1, 0]:
@@ -94,7 +99,17 @@ class Environment:
         # the platform is false, if it is, then return 10 and set the boolean true.
         # else return -0.1 to encourage speed
         # returns tuple of (double reward, boolean terminal_status)
-        pass
+        if self.agent_body.position[1] > height-15:
+            self.running = False
+            # print("ended")
+            return -self.score*0.9
+        else:
+            for platform in self.platforms:
+                if (not platform[-1]) and (self.agent_body.position[1] < platform[0].position[1]):
+                    platform[-1] = True
+                    return 10
+
+        return 0
 
     def create_new_platform(self):
         # add new platform with between 60% change gap in middle, 40% chance at either end.
@@ -115,7 +130,7 @@ class Environment:
             platform_shape.elasticity = 1
             platform_body._set_velocity_func(self.platform_velocity_function())
             space.add(platform_body, platform_shape)
-            self.platforms.append((platform_body, platform_shape, False))
+            self.platforms.append([platform_body, platform_shape, False])
         else:
             line_1_start = 4
             line_1_end = np.random.randint(self.gap_size+4, width-(self.gap_size*2)-4)
@@ -140,8 +155,8 @@ class Environment:
             platform_2_shape.elasticity = 1
             platform_2_body._set_velocity_func(self.platform_velocity_function())
             space.add(platform_1_body, platform_1_shape, platform_2_body, platform_2_shape)
-            self.platforms.append((platform_1_body, platform_1_shape, platform_2_body,
-                                   platform_2_shape, False))
+            self.platforms.append([platform_1_body, platform_1_shape, platform_2_body,
+                                   platform_2_shape, False])
         pass
 
     def remove_off_screen_platforms(self):
