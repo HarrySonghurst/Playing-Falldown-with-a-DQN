@@ -4,7 +4,7 @@ from pygame.locals import *
 import pymunk.pygame_util
 from pygame.colordict import THECOLORS
 import numpy as np
-
+np.set_printoptions(threshold=np.nan, linewidth=200)
 
 
 height, width = 512, 384
@@ -14,7 +14,6 @@ pygame.init()
 screen = pygame.display.set_mode((width, height))
 screen.set_alpha(None)  # alpha unused, marginal speed improvement
 clock = pygame.time.Clock()
-
 
 # pymunk / physics initialisations
 space = pymunk.Space()
@@ -40,46 +39,49 @@ class Environment:
 
     def tick(self, action_to_take):
 
-        # initially, don't allow the agent to move, and hold the body still until the first platform
-        # has passed the vertical midpoint of the screen.
-        # take_action()
-        # if the last platform in the list of platforms has passed an appropriate height, create_new_platform()
-        # remove_off_screen_platforms()
-
         # don't allow the agent to move until the first platform has passed the y-midpoint
         if self.hold_agent_stationary:
             self.check_game_begin_condition()
-
 
         # create new platform when the lowest platform height > platform_spacing
         if self.platforms[-1][0].position[1] > self.platform_spacing:
             self.create_new_platform()
 
         self.remove_off_screen_platforms()
+
         self.take_action(action_to_take)
-        reward = self.get_reward()
-        if reward != 0:
-            self.score += reward
-            print(self.score)
 
         # update physics and draw to screen
-        screen.fill(THECOLORS["white"])
+        screen.fill(THECOLORS['white'])
         space.debug_draw(draw_options)
         space.step(1.0/60.0)
         pygame.display.update()
         clock.tick(50)
         pygame.display.set_caption("Falldown (fps: " + str(clock.get_fps()) + ")")
 
+        # get reward
+        reward = self.get_reward()
+        if reward != 0:
+            self.score += reward
+
+
         # get_reward returns the reward associated with the new state, along with terminal_status
-        # new_state = format_surface_render(pygame.PixelArray(surface))
+        new_state = self.format_surface_render(screen)
+
+
 
         # returns (new_state, reward, terminal_status)
         pass
 
-    def format_surface_render(self, pixel_array):
-        # transform and return the pixel array obtained from the pygame surface by scaling it down, then
-        # turning it into a 1D array to be fed into the neural network.
-        pass
+    def format_surface_render(self, surface):
+        resized_surface = pygame.transform.smoothscale(pygame.PixelArray(surface).make_surface(), (64,48))
+        formatted_array = np.zeros(resized_surface.get_size())
+        for i in range(resized_surface.get_width()):
+            for j in range(resized_surface.get_height()):
+                pixel_channels = resized_surface.get_at((i, j))
+                if not ((pixel_channels[0] > 245) and (pixel_channels[1] > 245) and (pixel_channels[2] > 245)):
+                    formatted_array[i, j] = 1
+        return formatted_array
 
     def take_action(self, a):
         # action == [0, 0] : do not change agent velocity
@@ -215,6 +217,7 @@ class Environment:
         for wall in walls:
             wall.elasticity = 0.1
             wall.friction = 0.50
+            wall.color = THECOLORS['white']
         space.add(walls)
 
 
