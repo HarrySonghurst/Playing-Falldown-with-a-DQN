@@ -4,8 +4,8 @@ from pygame.locals import *
 import pymunk.pygame_util
 from pygame.colordict import THECOLORS
 import numpy as np
-np.set_printoptions(threshold=np.nan, linewidth=200)
-
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 height, width = 512, 384
 
@@ -20,6 +20,8 @@ space = pymunk.Space()
 space.gravity = (0.0, -900)
 draw_options = pymunk.pygame_util.DrawOptions(screen)
 
+np.set_printoptions(threshold=np.nan, linewidth=200)
+
 
 class Environment:
 
@@ -29,13 +31,12 @@ class Environment:
         self.running = True
         self.hold_agent_stationary = True
         self.score = 0
-        # init list of platforms and create the first one
         self.platform_spacing = platform_spacing
         self.platform_speed = platform_speed
         self.gap_size = gap_size
         self.platforms = []
         self.create_new_platform()
-        pass
+        self.ticks = 0
 
     def tick(self, action_to_take):
 
@@ -57,28 +58,29 @@ class Environment:
         space.step(1.0/60.0)
         pygame.display.update()
         clock.tick(50)
-        pygame.display.set_caption("Falldown (fps: " + str(clock.get_fps()) + ")")
+        pygame.display.set_caption("Falldown (fps: " + str(clock.get_fps()) + ", score: " + str(self.score) + ")")
 
-        # get reward
         reward = self.get_reward()
         if reward != 0:
             self.score += reward
 
 
-        # get_reward returns the reward associated with the new state, along with terminal_status
         new_state = self.format_surface_render(screen)
 
-
+        self.ticks += 1
+        if self.ticks > 500:
+            plt.imsave('img.png', new_state, cmap=cm.gray)
+            self.running = False
 
         # returns (new_state, reward, terminal_status)
-        pass
+        return new_state, reward, self.running
 
     def format_surface_render(self, surface):
-        resized_surface = pygame.transform.smoothscale(pygame.PixelArray(surface).make_surface(), (64,48))
-        formatted_array = np.zeros(resized_surface.get_size())
-        for i in range(resized_surface.get_width()):
-            for j in range(resized_surface.get_height()):
-                pixel_channels = resized_surface.get_at((i, j))
+        resized_surface = pygame.transform.smoothscale(pygame.PixelArray(surface).make_surface(), (48, 64))  # (W, H)
+        formatted_array = np.zeros((64, 48))
+        for i in range(64):
+            for j in range(48):
+                pixel_channels = resized_surface.get_at((j, i))  # (x, y)
                 if not ((pixel_channels[0] > 245) and (pixel_channels[1] > 245) and (pixel_channels[2] > 245)):
                     formatted_array[i, j] = 1
         return formatted_array
@@ -91,26 +93,19 @@ class Environment:
             self.agent_body.apply_impulse_at_local_point((-15.0, 0.0), (0.0, 0.0))
         elif a == [1, 0]:
             self.agent_body.apply_impulse_at_local_point((15.0, 0.0), (0.0, 0.0))
-        pass
 
     def get_reward(self):
-        # check whether the agents y-position is less than or equal to its radius, if true,
-        # return -100 (maybe -(total score)?).
-        # check whether the y-coordinate of the top of the agent is greater than all the bottom
-        # y-coordinates of the platforms in the list, also check if the 'passed' boolean on
-        # the platform is false, if it is, then return 10 and set the boolean true.
-        # else return -0.1 to encourage speed
-        # returns tuple of (double reward, boolean terminal_status)
+        # punishment if agent hits the roof (terminal case).
         if self.agent_body.position[1] > height-15:
             self.running = False
-            # print("ended")
             return -self.score*0.9
+        # reward if agent passes through a gap it hasn't passed through before.
         else:
             for platform in self.platforms:
                 if (not platform[-1]) and (self.agent_body.position[1] < platform[0].position[1]):
                     platform[-1] = True
                     return 10
-
+        # else, reward 0.
         return 0
 
     def create_new_platform(self):
@@ -159,7 +154,6 @@ class Environment:
             space.add(platform_1_body, platform_1_shape, platform_2_body, platform_2_shape)
             self.platforms.append([platform_1_body, platform_1_shape, platform_2_body,
                                    platform_2_shape, False])
-        pass
 
     def remove_off_screen_platforms(self):
         # if bottom of platform y-coordinate is less than 0, remove it from the list and space.
@@ -170,14 +164,12 @@ class Environment:
             else:
                 space.remove(self.platforms[0][0], self.platforms[0][1])
             self.platforms.pop(0)
-        pass
 
     def check_game_begin_condition(self):
         # self.agent_body.position = (width/2, height/2)
         if self.platforms[0][0].position[1] > 80:
             self.agent_body._set_velocity_func(self.agent_velocity_function())
             self.hold_agent_stationary = False
-        pass
 
     # velocity integration function for the platforms.
     def platform_velocity_function(self):
@@ -219,7 +211,6 @@ class Environment:
             wall.friction = 0.50
             wall.color = THECOLORS['white']
         space.add(walls)
-
 
 if __name__ == "__main__":
     environment = Environment()
