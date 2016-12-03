@@ -80,9 +80,8 @@ class Environment:
         formatted_array = np.zeros((64, 48))
         for i in range(64):
             for j in range(48):
-                pixel_channels = resized_surface.get_at((j, i))  # (x, y)
-                if not ((pixel_channels[0] > 245) and (pixel_channels[1] > 245) and (pixel_channels[2] > 245)):
-                    formatted_array[i, j] = 1
+                red, green, blue, alpha = resized_surface.get_at((j, i))  # (x, y)
+                formatted_array[i, j] = (red + green + blue) / 3
         return formatted_array
 
     def take_action(self, a):
