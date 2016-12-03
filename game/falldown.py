@@ -53,7 +53,7 @@ class Environment:
         self.take_action(action_to_take)
 
         # update physics and draw to screen
-        screen.fill(THECOLORS['white'])
+        screen.fill(THECOLORS['black'])
         space.debug_draw(draw_options)
         space.step(1.0/60.0)
         pygame.display.update()
@@ -122,7 +122,7 @@ class Environment:
                                                          (platform_start,5.0),
                                                          (platform_end, 0.0),
                                                          (platform_end, 5.0)])
-            platform_shape.color = THECOLORS["black"]
+            platform_shape.color = THECOLORS["white"]
             platform_shape.elasticity = 1
             platform_body._set_velocity_func(self.platform_velocity_function())
             space.add(platform_body, platform_shape)
@@ -138,7 +138,7 @@ class Environment:
                                                          (line_1_start,5.0),
                                                          (line_1_end, 0.0),
                                                          (line_1_end, 5.0)])
-            platform_1_shape.color = THECOLORS["black"]
+            platform_1_shape.color = THECOLORS["white"]
             platform_1_shape.elasticity = 1
             platform_1_body._set_velocity_func(self.platform_velocity_function())
             platform_2_body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
@@ -147,7 +147,7 @@ class Environment:
                                                          (line_2_start,5.0),
                                                          (line_2_end, 0.0),
                                                          (line_2_end, 5.0)])
-            platform_2_shape.color = THECOLORS["black"]
+            platform_2_shape.color = THECOLORS["white"]
             platform_2_shape.elasticity = 1
             platform_2_body._set_velocity_func(self.platform_velocity_function())
             space.add(platform_1_body, platform_1_shape, platform_2_body, platform_2_shape)
@@ -192,7 +192,7 @@ class Environment:
         self.agent_body = pymunk.Body(mass=1, moment=1)
         self.agent_body.position = (width/2, height/2)
         self.agent_shape = pymunk.Circle(self.agent_body, 15)
-        self.agent_shape.color = THECOLORS["red"]
+        self.agent_shape.color = THECOLORS["cyan"]
         self.agent_shape.elasticity = 0.2
         self.agent_body._set_velocity_func(self.agent_stationary_velocity_function())
         space.add(self.agent_body, self.agent_shape)
@@ -208,7 +208,7 @@ class Environment:
         for wall in walls:
             wall.elasticity = 0.1
             wall.friction = 0.50
-            wall.color = THECOLORS['white']
+            wall.color = THECOLORS['black']
         space.add(walls)
 
 if __name__ == "__main__":
