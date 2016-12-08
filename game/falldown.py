@@ -39,7 +39,7 @@ class Environment:
         self.ticks = 0
 
     def tick(self, action_to_take):
-
+        """ returns (new state matrix (64, 48) np array of grayscale ints, reward for frame, terminal status) """
         # don't allow the agent to move until the first platform has passed the y-midpoint
         if self.hold_agent_stationary:
             self.check_game_begin_condition()
@@ -57,31 +57,24 @@ class Environment:
         space.debug_draw(draw_options)
         space.step(1.0/60.0)
         pygame.display.update()
-        clock.tick(50)
+        clock.tick()
         pygame.display.set_caption("Falldown (fps: " + str(clock.get_fps()) + ", score: " + str(self.score) + ")")
 
         reward = self.get_reward()
         if reward != 0:
             self.score += reward
 
-
         new_state = self.format_surface_render(screen)
 
-        self.ticks += 1
-        if self.ticks > 500:
-            plt.imsave('img.png', new_state, cmap=cm.gray)
-            self.running = False
-
-        # returns (new_state, reward, terminal_status)
         return new_state, reward, self.running
 
     def format_surface_render(self, surface):
         resized_surface = pygame.transform.smoothscale(pygame.PixelArray(surface).make_surface(), (48, 64))  # (W, H)
-        formatted_array = np.zeros((64, 48))
+        formatted_array = np.zeros((64, 48), dtype="int16")
         for i in range(64):
             for j in range(48):
                 red, green, blue, alpha = resized_surface.get_at((j, i))  # (x, y)
-                formatted_array[i, j] = (red + green + blue) / 3
+                formatted_array[i, j] = int((red + green + blue) / 3)
         return formatted_array
 
     def take_action(self, a):
@@ -211,38 +204,38 @@ class Environment:
             wall.color = THECOLORS['black']
         space.add(walls)
 
-if __name__ == "__main__":
-    environment = Environment()
-
-    # for the purposes of testing the game, keys pressed must be held in a dictionary and passed
-    # to tick otherwise holding a key has no effect
-
-    left, right = False, False
-
-    while environment.running:
-
-        # key handling for testing
-        for event in pygame.event.get():
-            if event.type == QUIT:
-                environment.running = False
-            if event.type == KEYDOWN:
-                if event.key == K_LEFT:
-                    left = True
-                elif event.key == K_RIGHT:
-                    right = True
-            elif event.type == KEYUP:
-                if event.key == K_LEFT:
-                    left = False
-                elif event.key == K_RIGHT:
-                    right = False
-        if left and right:
-            left, right = False, False
-
-        if left:
-            action = [0, 1]
-        elif right:
-            action = [1, 0]
-        else:
-            action = [0, 0]
-
-        environment.tick(action)
+# if __name__ == "__main__":
+#     environment = Environment()
+#
+#     # for the purposes of testing the game, keys pressed must be held in a dictionary and passed
+#     # to tick otherwise holding a key has no effect
+#
+#     left, right = False, False
+#
+#     while environment.running:
+#
+#         # key handling for testing
+#         for event in pygame.event.get():
+#             if event.type == QUIT:
+#                 environment.running = False
+#             if event.type == KEYDOWN:
+#                 if event.key == K_LEFT:
+#                     left = True
+#                 elif event.key == K_RIGHT:
+#                     right = True
+#             elif event.type == KEYUP:
+#                 if event.key == K_LEFT:
+#                     left = False
+#                 elif event.key == K_RIGHT:
+#                     right = False
+#         if left and right:
+#             left, right = False, False
+#
+#         if left:
+#             action = [0, 1]
+#         elif right:
+#             action = [1, 0]
+#         else:
+#             action = [0, 0]
+#
+#         environment.tick(action)
