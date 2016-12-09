@@ -1,31 +1,30 @@
 import pymunk
 import pygame
-from pygame.locals import *
 import pymunk.pygame_util
+from pygame.locals import *
 from pygame.colordict import THECOLORS
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
-height, width = 512, 384
-
-# pygame initialisations
-pygame.init()
-screen = pygame.display.set_mode((width, height))
-screen.set_alpha(None)  # alpha unused, marginal speed improvement
-clock = pygame.time.Clock()
-
-# pymunk / physics initialisations
-space = pymunk.Space()
-space.gravity = (0.0, -900)
-draw_options = pymunk.pygame_util.DrawOptions(screen)
-
+# dimensions to allow for 8*8 then 4*4 filter to convolve with no info loss.
+height, width = 544, 416
 np.set_printoptions(threshold=np.nan, linewidth=200)
 
 
 class Environment:
 
     def __init__(self, platform_speed=60, platform_spacing=80, gap_size=40):
+        # pygame initialisations
+        pygame.init()
+        self.screen = pygame.display.set_mode((width, height))
+        self.screen.set_alpha(None)  # alpha unused, marginal speed improvement
+        self.clock = pygame.time.Clock()
+
+        # pymunk / physics initialisations
+        self.space = pymunk.Space()
+        self.space.gravity = (0.0, -900)
+        self.draw_options = pymunk.pygame_util.DrawOptions(self.screen)
+
+        # other initializations
         self.init_agent()
         self.init_boundaries()
         self.running = True
@@ -36,7 +35,6 @@ class Environment:
         self.gap_size = gap_size
         self.platforms = []
         self.create_new_platform()
-        self.ticks = 0
 
     def tick(self, action_to_take):
         """ returns (new state matrix (64, 48) np array of grayscale ints, reward for frame, terminal status) """
@@ -53,26 +51,26 @@ class Environment:
         self.take_action(action_to_take)
 
         # update physics and draw to screen
-        screen.fill(THECOLORS['black'])
-        space.debug_draw(draw_options)
-        space.step(1.0/60.0)
+        self.screen.fill(THECOLORS['black'])
+        self.space.debug_draw(self.draw_options)
+        self.space.step(1.0/60.0)
         pygame.display.update()
-        clock.tick()
-        pygame.display.set_caption("Falldown (fps: " + str(clock.get_fps()) + ", score: " + str(self.score) + ")")
+        self.clock.tick()
+        pygame.display.set_caption("Falldown (fps: " + str(self.clock.get_fps()) + ", score: " + str(self.score) + ")")
 
         reward = self.get_reward()
         if reward != 0:
             self.score += reward
 
-        new_state = self.format_surface_render(screen)
+        new_state = self.format_surface_render(self.screen)
 
         return new_state, reward, self.running
 
     def format_surface_render(self, surface):
-        resized_surface = pygame.transform.smoothscale(pygame.PixelArray(surface).make_surface(), (48, 64))  # (W, H)
-        formatted_array = np.zeros((64, 48), dtype="int16")
-        for i in range(64):
-            for j in range(48):
+        resized_surface = pygame.transform.smoothscale(pygame.PixelArray(surface).make_surface(), (52, 68))  # (W, H)
+        formatted_array = np.zeros((68, 52), dtype="int16")
+        for i in range(68):
+            for j in range(52):
                 red, green, blue, alpha = resized_surface.get_at((j, i))  # (x, y)
                 formatted_array[i, j] = int((red + green + blue) / 3)
         return formatted_array
@@ -118,7 +116,7 @@ class Environment:
             platform_shape.color = THECOLORS["white"]
             platform_shape.elasticity = 1
             platform_body._set_velocity_func(self.platform_velocity_function())
-            space.add(platform_body, platform_shape)
+            self.space.add(platform_body, platform_shape)
             self.platforms.append([platform_body, platform_shape, False])
         else:
             line_1_start = 4
@@ -143,7 +141,7 @@ class Environment:
             platform_2_shape.color = THECOLORS["white"]
             platform_2_shape.elasticity = 1
             platform_2_body._set_velocity_func(self.platform_velocity_function())
-            space.add(platform_1_body, platform_1_shape, platform_2_body, platform_2_shape)
+            self.space.add(platform_1_body, platform_1_shape, platform_2_body, platform_2_shape)
             self.platforms.append([platform_1_body, platform_1_shape, platform_2_body,
                                    platform_2_shape, False])
 
@@ -151,10 +149,10 @@ class Environment:
         # if bottom of platform y-coordinate is less than 0, remove it from the list and space.
         if self.platforms[0][0].position[1] > height:
             if len(self.platforms[0]) > 3:
-                space.remove(self.platforms[0][0], self.platforms[0][1],
-                             self.platforms[0][2], self.platforms[0][3])
+                self.space.remove(self.platforms[0][0], self.platforms[0][1],
+                                  self.platforms[0][2], self.platforms[0][3])
             else:
-                space.remove(self.platforms[0][0], self.platforms[0][1])
+                self.space.remove(self.platforms[0][0], self.platforms[0][1])
             self.platforms.pop(0)
 
     def check_game_begin_condition(self):
@@ -188,10 +186,10 @@ class Environment:
         self.agent_shape.color = THECOLORS["cyan"]
         self.agent_shape.elasticity = 0.2
         self.agent_body._set_velocity_func(self.agent_stationary_velocity_function())
-        space.add(self.agent_body, self.agent_shape)
+        self.space.add(self.agent_body, self.agent_shape)
 
     def init_boundaries(self):
-        static_body = space.static_body
+        static_body = self.space.static_body
         walls = [
                  pymunk.Segment(static_body, (0.0, 0.0), (0.0, height), 0.0),          # left wall
                  pymunk.Segment(static_body, (width-1, 0.0), (width-1, height), 0.0),  # right wall
@@ -202,40 +200,44 @@ class Environment:
             wall.elasticity = 0.1
             wall.friction = 0.50
             wall.color = THECOLORS['black']
-        space.add(walls)
+        self.space.add(walls)
 
-# if __name__ == "__main__":
-#     environment = Environment()
-#
-#     # for the purposes of testing the game, keys pressed must be held in a dictionary and passed
-#     # to tick otherwise holding a key has no effect
-#
-#     left, right = False, False
-#
-#     while environment.running:
-#
-#         # key handling for testing
-#         for event in pygame.event.get():
-#             if event.type == QUIT:
-#                 environment.running = False
-#             if event.type == KEYDOWN:
-#                 if event.key == K_LEFT:
-#                     left = True
-#                 elif event.key == K_RIGHT:
-#                     right = True
-#             elif event.type == KEYUP:
-#                 if event.key == K_LEFT:
-#                     left = False
-#                 elif event.key == K_RIGHT:
-#                     right = False
-#         if left and right:
-#             left, right = False, False
-#
-#         if left:
-#             action = [0, 1]
-#         elif right:
-#             action = [1, 0]
-#         else:
-#             action = [0, 0]
-#
-#         environment.tick(action)
+if __name__ == "__main__":
+    environment = Environment()
+
+    # for the purposes of testing the game, keys pressed must be held in a dictionary and passed
+    # to tick otherwise holding a key has no effect
+
+    left, right = False, False
+    do_run = True
+
+    while do_run:
+
+        if environment.running:
+            # key handling for testing
+            for event in pygame.event.get():
+                if event.type == QUIT:
+                    do_run = False
+                if event.type == KEYDOWN:
+                    if event.key == K_LEFT:
+                        left = True
+                    elif event.key == K_RIGHT:
+                        right = True
+                elif event.type == KEYUP:
+                    if event.key == K_LEFT:
+                        left = False
+                    elif event.key == K_RIGHT:
+                        right = False
+            if left and right:
+                left, right = False, False
+
+            if left:
+                action = [0, 1]
+            elif right:
+                action = [1, 0]
+            else:
+                action = [0, 0]
+
+            environment.tick(action)
+        else:
+            environment = Environment()

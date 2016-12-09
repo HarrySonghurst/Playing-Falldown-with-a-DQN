@@ -3,6 +3,9 @@ import Q_network
 import random
 import numpy as np
 
+
+model = Q_network.model
+
 # hyperparameters
 
 epochs = 1000
@@ -16,23 +19,27 @@ index_to_replace = 0
 #           stay   left    right
 actions = [[0, 0], [0, 1], [1, 0]]
 
-model = Q_network.get_model()
+# need the last 4 frames to feed into the net (context).
 
 for i in range(epochs):
 
     environment = falldown.Environment()
-    state = environment.tick()
-    running_status = True
+    state, reward, terminal_status = environment.tick()
 
-    while running_status:
+    while terminal_status:
         # We're in state S, run the Q network forwards on S to obtain
-        # Q values of all possible actions, which then allows us to make
-        # an epsilon greedy move.
-        Q_value = model.predict(state.reshape(1,64), batch_size=1)
-        if np.random.random() < epsilon:
+        # Q values of all possible actions, which then allows us to take
+        # an epsilon greedy action. However, if the game has just begun, then
+        # we need to wait for at least 4 frames to play out.
+        if len(memory) < 4:
             action = np.random.randint(0, 3)
         else:
-            action = np.argmax(Q_value)
+            # predict using the last 4 frames
+            Q_value = model.predict(state, batch_size=1)
+            if np.random.random() < epsilon:
+                action = np.random.randint(0, 3)
+            else:
+                action = np.argmax(Q_value)
 
         new_state, reward, running_status = environment.tick(actions[action])
 
