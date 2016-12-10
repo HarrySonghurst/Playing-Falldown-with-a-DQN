@@ -1,109 +1,103 @@
 from game import falldown
 import Q_network
+from collections import deque
 import random
 import numpy as np
+from keras.models import load_model
+import os.path
 
-
-model = Q_network.construct_model()
+# initialize the neural network
+if os.path.isfile("model.h5"):
+    model = load_model("model.h5")
+else:
+    model = Q_network.construct_model()
 
 # hyperparameters
-
 epochs = 1000
 discount_factor = 0.9
-epsilon = 1.0
-gamma = 0.975
-# how far to reach back into memory to construct a prediction sample for
-context_size = 4
-batch_size = 60
-memory_size = 100
-memory = []
-index_to_replace = 0
+epsilon = 0.1
+gamma = 0.98
+batch_size = 32
+frames_before_training = 1000
+memory_size = 10000
+replay_memory = deque()
 #           stay   left    right
 actions = [[0, 0], [0, 1], [1, 0]]
+t = 0
+loss = 0
 
-# need the last 4 frames to feed into the net (context).
+for epoch in range(epochs):
 
-for i in range(epochs):
-
+    # init a game
     environment = falldown.Environment()
-    # get initial state, needs to be 4 frames so
-    state, reward, terminal_status = environment.tick([0,0])
 
-    # while environment is not terminal
+    # obtain the first state by ticking
+    frame_t, reward_t, terminal_status = environment.tick([0,0])
+
+    # stack the initial 4 frames to produce the initial state and format it for Keras
+    state_t = np.stack((frame_t, frame_t, frame_t, frame_t), axis=2)
+    state_t = np.reshape(state_t, (1, state_t.shape[0], state_t.shape[1], state_t.shape[2]))
+
+    # while environment is not terminal (game is lost)
     while terminal_status:
 
-        # initially we need to wait for at least 4 frames of play
-        if len(memory) < context_size:
-            action = np.random.randint(0, 3)
+        # take an epsilon greedy action
+        if np.random.random() < epsilon:
+            action_t = actions[np.random.randint(0,3)]
         else:
-            # run the Q network forwards on S to obtain Q values of
-            # all possible actions, which then allows us to take
-            # an epsilon greedy action.
-            if np.random.random() < epsilon:
-                action = np.random.randint(0, 3)
-            else:
-                # predict using a stack of the last 4 frames, the number of which is specified by the context_size
-                sample = np.zeros((context_size, state.shape[0], state.shape[1]))
-                for mem in range(context_size):
-                    sample[mem] = memory[-(mem+1)][0]
-                # have to reshape because keras takes a 'sample' dimension initially.
-                Q_value = model.predict(sample.reshape((1, sample[0], sample[1], sample[2])), batch_size=1)
-                action = np.argmax(Q_value)
+            Q_values_t = model.predict(state_t, batch_size=1)
+            action_t = actions[np.argmax(Q_values_t)]
 
-        new_state, reward, running_status = environment.tick(actions[action])
+        frame_t1, reward_t1, terminal_status_t1 = environment.tick(action_t)
+        terminal_status = terminal_status_t1
 
-        # Experience replay storage, if less than buffer size, store a tuple of (S, A, St+1, Rt+1)
-        if len(memory) < memory_size:
-            memory.append((state, action, new_state, reward))
-        else:
-            # surely this will mean that memory[0] sticks around for two iterations initially?
-            # and that memory[79] and memory[80] never actually get replaced?
-            if index_to_replace < memory_size-1:
-                index_to_replace += 1
-            else:
-                index_to_replace = 0
+        # using the observed returns of the new frame, construct a new state from the
+        # frame itself and from the last 3 frames of state_t.
+        frame_t1 = np.reshape(frame_t1, (1, frame_t1.shape[0], frame_t1.shape[1], 1))
+        state_t1 = np.append(frame_t1, state_t[:, :, :, :3], axis=3)
 
-            # replace the memories one by one, iteratively filling the it with new memories.
-            memory[index_to_replace] = (state, action, new_state, reward)
+        # append (s,a,s_t+1, r_t+1) tuple to the replay memory
+        replay_memory.append((state_t, action_t, state_t1, reward_t1, terminal_status_t1))
 
-            # now sample the memory for a mini-batch of memories to fit with
-            mini_batch = random.sample(memory, batch_size)
+        # pop the oldest item in memory if its over the specified memory_size
+        if len(replay_memory) > memory_size:
+            replay_memory.popleft()
 
-            X_train = []
-            y_train = []
+        # only train after a certain amount of experience has been observed.
+        if t > frames_before_training:
+            print("Training")
+            # sample a random minibatch of the replay memory to train on
+            minibatch = random.sample(replay_memory, batch_size)
 
-            for this_memory in mini_batch:
+            # init X and y training arrays
+            X_train = np.zeros((batch_size, state_t.shape[1], state_t.shape[2], state_t.shape[3]))
+            y_train = np.zeros((batch_size, 3))
 
-                state, action, new_state, reward = this_memory
-                # predict using a stack of the last frames, the number of which is specified by the context_size
-                sample = np.zeros((context_size, state.shape[0], state.shape[1]))
-                for mem in range(context_size):
-                    sample[mem] = memory[-(mem+1)][0]
+            for memory in range(batch_size):
 
-                old_Q_value = model.predict(state.reshape((1, sample[0], sample[1], sample[2])), batch_size=1)
-                new_Q_value = model.predict(new_state.reshape((1, sample[0], sample[1], sample[2])), batch_size=1)
-                # remember that maxQ essentially makes the network take into account
-                # future expected rewards...
-                maxQ = np.max(new_Q_value)
-                target = np.zeros((1,3))
-                target[:] = old_Q_value[:]
-                if reward == -0.001:  # non-terminal state, keep playing
-                    update = reward + discount_factor * maxQ
+                # unpack the memory in the minibatch
+                state_t, action_t, state_t1, reward_t1, terminal_status_t1 = minibatch[memory]
+
+                # make state_t the X for this training memory
+                X_train[memory:memory+1] = state_t
+                # corresponding target will be the prediction, with the value of index of
+                # action taken changed.
+                y_train[memory] = model.predict(state_t, batch_size=1)
+
+                # if the game is over, the update = reward
+                if not terminal_status_t1:
+                    update = reward_t1 + gamma * np.max(model.predict(state_t1, batch_size=1))
+                    y_train[memory][actions.index(action_t)] = update
                 else:
-                    update = reward
-
-                target[0][action] = update
-                X_train.append(state.reshape((1, sample[0], sample[1], sample[2])))
-                y_train.append(target.reshape(3,))
-
-                # turn the list of arrays into a single array with each row containing training example
-            X_train = np.array(X_train)
-            y_train = np.array(y_train)
-
-            print("Game {}".format(i))
+                    y_train[memory][actions.index(action_t)] = reward_t1
 
             model.fit(X_train, y_train, batch_size=batch_size, nb_epoch=1)
-            state = new_state
 
-    if epsilon > 0.1:
-        epsilon -= 1/epochs
+        t += 1
+        state_t = state_t1
+
+        if t % 100 == 0:
+            print("saving model")
+            model.save("model.h5")
+
+    print("Episode {} finished.".format(epoch))

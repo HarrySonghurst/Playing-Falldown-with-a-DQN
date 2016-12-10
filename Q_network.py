@@ -7,7 +7,7 @@ def construct_model():
     model = Sequential()
     # 64 3*3 filters, valid border (no zero padding), without regularization for now.
     # Will need to accept 64*48*4 volume of inputs. (4 deep = 4 last frames).
-
+    # note, tensorflow backend so input to model needs to be (samples, rows, cols, channels)
     # As per DeepMinds atari DQN, first conv has 32 8*8 filters with stride 4.
     # output of first conv will be (W - F + 2P)/S + 1 = (32,16,12)
     model.add(Convolution2D(32, 8, 8, subsample=(4, 4), input_shape=(68, 52, 4), activation='relu'))

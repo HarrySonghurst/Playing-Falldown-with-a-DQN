@@ -54,9 +54,9 @@ class Environment:
         self.screen.fill(THECOLORS['black'])
         self.space.debug_draw(self.draw_options)
         self.space.step(1.0/60.0)
-        pygame.display.update()
         self.clock.tick()
         pygame.display.set_caption("Falldown (fps: " + str(self.clock.get_fps()) + ", score: " + str(self.score) + ")")
+        pygame.display.update()
 
         reward = self.get_reward()
         if reward != 0:
