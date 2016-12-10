@@ -95,8 +95,8 @@ class Environment:
                 if (not platform[-1]) and (self.agent_body.position[1] < platform[0].position[1]):
                     platform[-1] = True
                     return 10
-        # else, reward 0.
-        return 0
+        # else, reward -0.001
+        return -0.001
 
     def create_new_platform(self):
         # add new platform with between 60% change gap in middle, 40% chance at either end.
