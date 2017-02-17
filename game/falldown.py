@@ -88,7 +88,7 @@ class Environment:
         # punishment if agent hits the roof (terminal case).
         if self.agent_body.position[1] > height-15:
             self.running = False
-            return -self.score*0.9
+            return -np.abs(self.score*0.9)
         # reward if agent passes through a gap it hasn't passed through before.
         else:
             for platform in self.platforms:
@@ -96,7 +96,7 @@ class Environment:
                     platform[-1] = True
                     return 10
         # else, reward -0.001
-        return -0.001
+        return -0.05
 
     def create_new_platform(self):
         # add new platform with between 60% change gap in middle, 40% chance at either end.

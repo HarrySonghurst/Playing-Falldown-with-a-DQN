@@ -15,7 +15,7 @@ else:
 # hyperparameters
 epochs = 1000
 discount_factor = 0.9
-epsilon = 0.1
+epsilon = 0
 gamma = 0.98
 batch_size = 32
 frames_before_training = 1000
@@ -65,7 +65,7 @@ for epoch in range(epochs):
 
         # only train after a certain amount of experience has been observed.
         if t > frames_before_training:
-            print("Training")
+            # print("Training")
             # sample a random minibatch of the replay memory to train on
             minibatch = random.sample(replay_memory, batch_size)
 
@@ -91,7 +91,7 @@ for epoch in range(epochs):
                 else:
                     y_train[memory][actions.index(action_t)] = reward_t1
 
-            model.fit(X_train, y_train, batch_size=batch_size, nb_epoch=1)
+            model.fit(X_train, y_train, batch_size=batch_size, nb_epoch=1, verbose=0)
 
         t += 1
         state_t = state_t1
