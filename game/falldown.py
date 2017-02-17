@@ -1,9 +1,11 @@
+import os
 import pymunk
 import pygame
 import pymunk.pygame_util
 from pygame.locals import *
 from pygame.colordict import THECOLORS
 import numpy as np
+#from PIL import Image
 
 # dimensions to allow for 8*8 then 4*4 filter to convolve with no info loss.
 height, width = 544, 416
@@ -12,10 +14,16 @@ np.set_printoptions(threshold=np.nan, linewidth=200)
 
 class Environment:
 
-    def __init__(self, platform_speed=60, platform_spacing=80, gap_size=40):
-        # pygame initialisations
-        pygame.init()
-        self.screen = pygame.display.set_mode((width, height))
+    def __init__(self, platform_speed=60, platform_spacing=80, gap_size=40, novid=True):
+
+        if novid:
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
+            pygame.display.init()
+            self.screen = pygame.display.set_mode((width,height)).convert(32)
+        else:
+            pygame.display.init()
+            self.screen = pygame.display.set_mode((width, height))
+
         self.screen.set_alpha(None)  # alpha unused, marginal speed improvement
         self.clock = pygame.time.Clock()
 
@@ -54,21 +62,25 @@ class Environment:
         self.screen.fill(THECOLORS['black'])
         self.space.debug_draw(self.draw_options)
         self.space.step(1.0/60.0)
-        self.clock.tick()
+        self.clock.tick(60)
         pygame.display.set_caption("Falldown (fps: " + str(self.clock.get_fps()) + ", score: " + str(self.score) + ")")
         pygame.display.update()
 
-        reward = self.get_reward()
+        reward = self.get_reward(action_to_take)
         if reward != 0:
             self.score += reward
 
         new_state = self.format_surface_render(self.screen)
 
+        # for testing whether the image/array is being generated correctly when run headless.
+        #img = Image.fromarray(new_state)
+        #img.save("img.png")
+
         return new_state, reward, self.running
 
     def format_surface_render(self, surface):
         resized_surface = pygame.transform.smoothscale(pygame.PixelArray(surface).make_surface(), (52, 68))  # (W, H)
-        formatted_array = np.zeros((68, 52), dtype="int16")
+        formatted_array = np.zeros((68, 52), dtype="uint8")
         for i in range(68):
             for j in range(52):
                 red, green, blue, alpha = resized_surface.get_at((j, i))  # (x, y)
@@ -84,19 +96,22 @@ class Environment:
         elif a == [1, 0]:
             self.agent_body.apply_impulse_at_local_point((15.0, 0.0), (0.0, 0.0))
 
-    def get_reward(self):
+    def get_reward(self, action_taken):
         # punishment if agent hits the roof (terminal case).
         if self.agent_body.position[1] > height-15:
             self.running = False
-            return -np.abs(self.score*0.9)
+            return -10
         # reward if agent passes through a gap it hasn't passed through before.
         else:
             for platform in self.platforms:
                 if (not platform[-1]) and (self.agent_body.position[1] < platform[0].position[1]):
                     platform[-1] = True
                     return 10
-        # else, reward -0.001
-        return -0.05
+        # to encourage constant movement
+        if action_taken == [0, 0]:
+            return -0.01
+        else:
+            return 0.01
 
     def create_new_platform(self):
         # add new platform with between 60% change gap in middle, 40% chance at either end.
@@ -203,7 +218,7 @@ class Environment:
         self.space.add(walls)
 
 if __name__ == "__main__":
-    environment = Environment()
+    environment = Environment(novid=False)
 
     # for the purposes of testing the game, keys pressed must be held in a dictionary and passed
     # to tick otherwise holding a key has no effect
